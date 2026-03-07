@@ -1,4 +1,4 @@
-package main
+package httpserver
 
 import (
 	"bufio"
@@ -11,13 +11,13 @@ import (
 
 type server struct {
 	router  *Router
-	dirName string
+	middlewares []MiddlewareFunc
 }
 
-func NewServer(router *Router, dirName string) *server {
+func NewServer(router *Router) *server {
 	return &server{
 		router:  router,
-		dirName: dirName,
+		middlewares: []MiddlewareFunc{},
 	}
 }
 
@@ -109,6 +109,7 @@ func (s *server) handleConn(conn net.Conn) {
 		}
 
 		ctx := NewContext(method, path, query, headers, body, conn)
+		ctx.RemoteAddr = conn.RemoteAddr().String()
 
 		handler, params := s.router.Match(method, path)
 
@@ -120,7 +121,8 @@ func (s *server) handleConn(conn net.Conn) {
 			ctx.Text(404, "")
 		} else {
 			ctx.Params = params
-			handler(ctx)
+			chain := s.buildChain(handler)
+			chain(ctx)
 		}
 
 		if shouldClose {	
@@ -136,4 +138,23 @@ func (s *server) Get(pattern string, handler HandlerFunc) {
 
 func (s *server) Post(pattern string, handler HandlerFunc) {
 	s.router.Post(pattern, handler)
+}
+
+func (s *server) Use(mw MiddlewareFunc) {
+	s.middlewares = append(s.middlewares, mw)
+}
+
+func (s *server) buildChain(handler HandlerFunc) HandlerFunc {
+	chain := handler 
+
+	for i := len(s.middlewares) - 1; i >= 0; i-- {
+		next := chain
+		mw := s.middlewares[i]
+
+		chain = func(ctx *Context) { 
+			mw(ctx, next) 
+		}
+	}
+
+	return chain
 }

@@ -1,3 +1,3 @@
-module github.com/codecrafters-io/http-server-starter-go
+module github.com/lDizil/Own-HTTP-server---DRPH
 
-go 1.25.0
+go 1.24.4

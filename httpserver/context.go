@@ -1,4 +1,4 @@
-package main
+package httpserver
 
 import (
 	"bytes"
@@ -20,9 +20,10 @@ type Context struct {
 	Body            []byte
 	writer          io.Writer
 	status          int
+	RemoteAddr       string
 }
 
-func NewContext(method, path string,  query map[string]string, headers map[string]string, body []byte, writer io.Writer) *Context {
+func NewContext(method, path string, query map[string]string, headers map[string]string, body []byte, writer io.Writer) *Context {
 	return &Context{
 		Method:          method,
 		Path:            path,
@@ -33,10 +34,11 @@ func NewContext(method, path string,  query map[string]string, headers map[strin
 		Body:            body,
 		writer:          writer,
 		status:          200,
+		RemoteAddr: "Неизвестный адрес",
 	}
 }
 
-func statusText(code int) string {
+func StatusText(code int) string {
 	switch code {
 	case 200:
 		return "OK"
@@ -56,7 +58,7 @@ func (c *Context) Bytes(code int, body []byte) {
 		c.status = code
 	}
 
-	var encodings []string 
+	var encodings []string
 
 	if val, ok := c.Headers["Accept-Encoding"]; ok {
 		encodings = strings.Split(val, ", ")
@@ -64,23 +66,21 @@ func (c *Context) Bytes(code int, body []byte) {
 
 	for _, encode := range encodings {
 		if encode == "gzip" {
-			var  buf bytes.Buffer
+			var buf bytes.Buffer
 
 			gzipWriter := gzip.NewWriter(&buf)
 
 			_, _ = gzipWriter.Write(body)
 
 			gzipWriter.Close()
-					
+
 			body = buf.Bytes()
 
 			c.responseHeaders["Content-Encoding"] = "gzip"
 		}
 	}
 
-	if val, ok := c.Headers["Content-Type"]; ok {
-		c.SetResponseHeader("Content-Type", val)
-	} else {
+	if _, ok := c.responseHeaders["Content-Type"]; !ok {
 		c.SetResponseHeader("Content-Type", "text/plain; charset=utf-8")
 	}
 
@@ -94,7 +94,7 @@ func (c *Context) Bytes(code int, body []byte) {
 		sliceOfHeadersLine = append(sliceOfHeadersLine, fmt.Sprintf("%s: %s", answHeader, val))
 	}
 
-	statusLine := fmt.Sprintf("HTTP/1.1 %d %s\r\n", code, statusText(code))
+	statusLine := fmt.Sprintf("HTTP/1.1 %d %s\r\n", code, StatusText(code))
 	headersLine := strings.Join(sliceOfHeadersLine, "\r\n") + "\r\n\r\n"
 
 	c.writer.Write([]byte(statusLine))
@@ -103,7 +103,7 @@ func (c *Context) Bytes(code int, body []byte) {
 }
 
 func (c *Context) Text(code int, body string) {
-	c.Headers["Content-Type"] = "text/plain; charset=utf-8"
+	c.responseHeaders["Content-Type"] = "text/plain; charset=utf-8"
 	c.Bytes(code, []byte(body))
 }
 
@@ -111,17 +111,17 @@ func (c *Context) JSON(code int, v any) {
 	data, err := json.Marshal(v)
 
 	if err != nil {
-        c.Bytes(500, []byte("internal error"))
-        return
-    }
-	
-	c.Headers["Content-Type"] = "application/json"
+		c.Bytes(500, []byte("internal error"))
+		return
+	}
+
+	c.responseHeaders["Content-Type"] = "application/json"
 
 	c.Bytes(code, data)
 }
 
 func (c *Context) File(code int, data []byte) {
-	c.Headers["Content-Type"] = "application/octet-stream"
+	c.responseHeaders["Content-Type"] = "application/octet-stream"
 	c.Bytes(code, data)
 }
 
@@ -131,4 +131,8 @@ func (c *Context) Status(code int) {
 
 func (c *Context) SetResponseHeader(key, value string) {
 	c.responseHeaders[key] = value
+}
+
+func (c *Context) StatusCode() int {
+	return c.status
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	h "github.com/lDizil/Own-HTTP-server---DRPH/httpserver"
 )
 
 func main() {
@@ -16,25 +17,28 @@ func main() {
 		}
 	}
 
-	r := &Router{}
-	s := NewServer(r, dirName)
+	r := &h.Router{}
+	s := h.NewServer(r)
 
-	s.Get("/", func(ctx *Context) {
+	s.Use(h.Recovery)
+	s.Use(h.Logger)
+
+	s.Get("/", func(ctx *h.Context) {
 		ctx.Text(200, "")
 	})
 	
-	s.Get("/echo/:str", func(ctx *Context) {
+	s.Get("/echo/:str", func(ctx *h.Context) {
 		ctx.Text(200, ctx.Params["str"])
 	})
 
-	s.Get("/user-agent", func(ctx *Context) {
+	s.Get("/user-agent", func(ctx *h.Context) {
 		ctx.Text(200, ctx.Headers["User-Agent"])
 	})
 
-	s.Get("/files/:filename", func(ctx *Context) {
+	s.Get("/files/:filename", func(ctx *h.Context) {
 		fileName := ctx.Params["filename"]
 
-		data, err := os.ReadFile(s.dirName + "/" + fileName)
+		data, err := os.ReadFile(dirName + "/" + fileName)
 
 		if err != nil {
 			ctx.Text(404, "")
@@ -44,7 +48,7 @@ func main() {
 		ctx.File(200, data)
 	})
 
-	s.Post("/files/:filename", func(ctx *Context) {
+	s.Post("/files/:filename", func(ctx *h.Context) {
 		fileName := ctx.Params["filename"]
 
 		err := os.WriteFile(dirName + "/"+ fileName, ctx.Body, 0644)
