@@ -24,6 +24,7 @@ type Server struct {
 	MaxBodySize int
 }
 
+
 func NewServer() *Server {
 	return &Server{
 		router:      &Router{},
@@ -191,6 +192,19 @@ func (s *Server) Post(pattern string, handler HandlerFunc) {
 	s.router.Post(pattern, handler)
 }
 
+func (s *Server) Put(pattern string, handler HandlerFunc) {
+	s.router.Put(pattern, handler)
+}
+
+func (s *Server) Delete(pattern string, handler HandlerFunc) {
+	s.router.Delete(pattern, handler)
+}
+
+func (s *Server) Patch(pattern string, handler HandlerFunc) {
+	s.router.Patch(pattern, handler)
+}
+
+
 func (s *Server) Use(mw MiddlewareFunc) {
 	s.middlewares = append(s.middlewares, mw)
 }
@@ -229,4 +243,11 @@ func (s *Server) Run(port string) {
 	s.Shutdown()
 
 	fmt.Println("Сервер остановлен")
+}
+
+func(s *Server) Group(prefix string) *Group {
+	return &Group{
+		routers: s,
+		prefix: prefix,
+	}
 }

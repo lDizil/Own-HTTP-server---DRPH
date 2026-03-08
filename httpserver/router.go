@@ -14,6 +14,7 @@ type Router struct {
 	Routes []Route
 }
 
+
 type HandlerFunc func(ctx *Context)
 
 func (r *Router) Add(method string, pattern string, handler HandlerFunc) {
@@ -33,6 +34,19 @@ func (r *Router) Get(pattern string, handler HandlerFunc) {
 func (r *Router) Post(pattern string, handler HandlerFunc) {
 	r.Add("POST", pattern, handler)
 }
+
+func (r *Router) Delete(pattern string, handler HandlerFunc) {
+	r.Add("DELETE", pattern, handler)
+}
+
+func (r *Router) Patch(pattern string, handler HandlerFunc) {
+	r.Add("PATCH", pattern, handler)
+}
+
+func (r *Router) Put(pattern string, handler HandlerFunc) {
+	r.Add("PUT", pattern, handler)
+}
+
 
 func (r *Router) Match(method string, path string) (HandlerFunc, map[string]string) {
 	for _, route := range r.Routes {

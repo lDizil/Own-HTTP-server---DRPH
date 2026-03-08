@@ -38,21 +38,6 @@ func NewContext(method, path string, query map[string]string, headers map[string
 	}
 }
 
-func StatusText(code int) string {
-	switch code {
-	case 200:
-		return "OK"
-	case 201:
-		return "Created"
-	case 404:
-		return "Not Found"
-	case 500:
-		return "Internal Server Error"
-	default:
-		return "Unknown"
-	}
-}
-
 func (c *Context) Bytes(code int, body []byte) {
 	if code != 0 {
 		c.status = code
