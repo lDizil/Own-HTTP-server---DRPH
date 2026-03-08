@@ -5,24 +5,30 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
+	"time"
 )
 
 type Server struct {
 	router      *Router
 	middlewares []MiddlewareFunc
 	listener    net.Listener
-	wg sync.WaitGroup
-	closing atomic.Bool
+	wg          sync.WaitGroup
+	closing     atomic.Bool
+	MaxBodySize int
 }
 
-func NewServer(router *Router) *Server {
+func NewServer() *Server {
 	return &Server{
-		router:      router,
+		router:      &Router{},
 		middlewares: []MiddlewareFunc{},
+		MaxBodySize: 10 << 20,
 	}
 }
 
@@ -59,20 +65,31 @@ func (s *Server) handleConn(conn net.Conn) {
 	reader := bufio.NewReader(conn)
 
 	for {
+		conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 		headers := make(map[string]string)
 
 		var method string
 		var path string
 		var body []byte
 
+		var badRequest bool
+
 		pathLine, err := reader.ReadString('\n')
+
+		conn.SetDeadline(time.Now().Add(10 * time.Second))
 
 		if err != nil {
 			conn.Close()
 			break
 		}
 
-		pathElements := strings.Split(pathLine, " ")
+		pathElements := strings.Split(strings.TrimSpace(pathLine), " ")
+
+		if len(pathElements) < 3 {
+			conn.Write([]byte("HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"))
+			conn.Close()
+			break
+		}
 
 		method, path = pathElements[0], pathElements[1]
 
@@ -100,9 +117,21 @@ func (s *Server) handleConn(conn net.Conn) {
 				break
 			}
 
-			reqPartsHeaders := strings.Split(headersLine, ": ")
+			reqPartsHeaders := strings.SplitN(headersLine, ": ", 2)
+
+			if len(reqPartsHeaders) < 2 {
+				conn.Write([]byte("HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"))
+				conn.Close()
+				badRequest = true
+				break
+			}
+
 			headers[reqPartsHeaders[0]] = strings.TrimSpace(reqPartsHeaders[1])
 
+		}
+
+		if badRequest {
+			break
 		}
 
 		var shouldClose bool
@@ -114,7 +143,18 @@ func (s *Server) handleConn(conn net.Conn) {
 		}
 
 		if lenStr, ok := headers["Content-Length"]; ok {
-			length, _ := strconv.Atoi(strings.TrimSpace(lenStr))
+			length, err := strconv.Atoi(strings.TrimSpace(lenStr))
+
+			if err != nil || length < 0 {
+				conn.Write([]byte("HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"))
+				conn.Close()
+				break
+			} else if length > s.MaxBodySize {
+				conn.Write([]byte("HTTP/1.1 413 Content Too Large\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"))
+				conn.Close()
+				break
+			}
+
 			body = make([]byte, length)
 			io.ReadFull(reader, body)
 		}
@@ -174,4 +214,19 @@ func (s *Server) Shutdown() {
 	s.closing.Store(true)
 	s.listener.Close()
 	s.wg.Wait()
+}
+
+func (s *Server) Run(port string) {
+	go s.Listen("0.0.0.0:" + port)
+
+	fmt.Println("Http сервер успешно запущен")
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	<-quit
+
+	s.Shutdown()
+
+	fmt.Println("Сервер остановлен")
 }

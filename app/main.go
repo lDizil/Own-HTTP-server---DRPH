@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
 
 	h "github.com/lDizil/Own-HTTP-server---DRPH/httpserver"
 )
@@ -20,8 +18,7 @@ func main() {
 		}
 	}
 
-	r := &h.Router{}
-	s := h.NewServer(r)
+	s := h.NewServer()
 
 	s.Use(h.Recovery)
 	s.Use(h.Logger)
@@ -64,16 +61,5 @@ func main() {
 		ctx.File(201, []byte{})
 	})
 
-
-	go s.Listen("0.0.0.0:4221")
-	
-	fmt.Println("Http сервер успешно запущен")
-
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-	
-	s.Shutdown()
-	
-	fmt.Println("Сервер остановлен")
+	s.Run("4221")
 }
