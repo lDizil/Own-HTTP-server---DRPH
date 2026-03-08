@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
+
 	h "github.com/lDizil/Own-HTTP-server---DRPH/httpserver"
 )
 
@@ -26,7 +29,7 @@ func main() {
 	s.Get("/", func(ctx *h.Context) {
 		ctx.Text(200, "")
 	})
-	
+
 	s.Get("/echo/:str", func(ctx *h.Context) {
 		ctx.Text(200, ctx.Params["str"])
 	})
@@ -51,7 +54,7 @@ func main() {
 	s.Post("/files/:filename", func(ctx *h.Context) {
 		fileName := ctx.Params["filename"]
 
-		err := os.WriteFile(dirName + "/"+ fileName, ctx.Body, 0644)
+		err := os.WriteFile(dirName+"/"+fileName, ctx.Body, 0644)
 
 		if err != nil {
 			ctx.Text(500, "")
@@ -61,9 +64,16 @@ func main() {
 		ctx.File(201, []byte{})
 	})
 
+
+	go s.Listen("0.0.0.0:4221")
+	
 	fmt.Println("Http сервер успешно запущен")
 
-	s.Listen("0.0.0.0:4221")
-
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	
+	s.Shutdown()
+	
+	fmt.Println("Сервер остановлен")
 }
-

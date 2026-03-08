@@ -7,21 +7,26 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 )
 
-type server struct {
-	router  *Router
+type Server struct {
+	router      *Router
 	middlewares []MiddlewareFunc
+	listener    net.Listener
+	wg sync.WaitGroup
+	closing atomic.Bool
 }
 
-func NewServer(router *Router) *server {
-	return &server{
-		router:  router,
+func NewServer(router *Router) *Server {
+	return &Server{
+		router:      router,
 		middlewares: []MiddlewareFunc{},
 	}
 }
 
-func (s *server) Listen(addr string) error {
+func (s *Server) Listen(addr string) error {
 	l, err := net.Listen("tcp", addr)
 
 	if err != nil {
@@ -29,21 +34,28 @@ func (s *server) Listen(addr string) error {
 		return err
 	}
 
+	s.listener = l
 
 	for {
 		conn, err := l.Accept()
 
-		if err != nil {
+		if err != nil && s.closing.Load() {
+			fmt.Println("Сервер останавливается... Ожидание завершения обработки запросов")
+			return nil
+		} else if err != nil {
 			err = fmt.Errorf("Error accepting connection: %s", err.Error())
 			return err
 		}
 
+		s.wg.Add(1)
 		go s.handleConn(conn)
 
 	}
 }
 
-func (s *server) handleConn(conn net.Conn) {
+func (s *Server) handleConn(conn net.Conn) {
+	defer s.wg.Done()
+
 	reader := bufio.NewReader(conn)
 
 	for {
@@ -54,15 +66,14 @@ func (s *server) handleConn(conn net.Conn) {
 		var body []byte
 
 		pathLine, err := reader.ReadString('\n')
-		
-		
+
 		if err != nil {
 			conn.Close()
 			break
 		}
 
 		pathElements := strings.Split(pathLine, " ")
-		
+
 		method, path = pathElements[0], pathElements[1]
 
 		var query map[string]string
@@ -72,14 +83,14 @@ func (s *server) handleConn(conn net.Conn) {
 			pairs := strings.Split(rawQuery, "&")
 
 			query = make(map[string]string, len(pairs))
-			
+
 			for _, pair := range pairs {
 				kv := strings.SplitN(pair, "=", 2)
 				if len(kv) == 2 {
 					query[kv[0]] = kv[1]
 				}
 			}
-	 	}
+		}
 
 		for {
 
@@ -113,7 +124,7 @@ func (s *server) handleConn(conn net.Conn) {
 
 		handler, params := s.router.Match(method, path)
 
-		if shouldClose {	
+		if shouldClose {
 			ctx.responseHeaders["Connection"] = "close"
 		}
 
@@ -125,36 +136,42 @@ func (s *server) handleConn(conn net.Conn) {
 			chain(ctx)
 		}
 
-		if shouldClose {	
+		if shouldClose {
 			conn.Close()
 			break
 		}
 	}
 }
 
-func (s *server) Get(pattern string, handler HandlerFunc) {
+func (s *Server) Get(pattern string, handler HandlerFunc) {
 	s.router.Get(pattern, handler)
 }
 
-func (s *server) Post(pattern string, handler HandlerFunc) {
+func (s *Server) Post(pattern string, handler HandlerFunc) {
 	s.router.Post(pattern, handler)
 }
 
-func (s *server) Use(mw MiddlewareFunc) {
+func (s *Server) Use(mw MiddlewareFunc) {
 	s.middlewares = append(s.middlewares, mw)
 }
 
-func (s *server) buildChain(handler HandlerFunc) HandlerFunc {
-	chain := handler 
+func (s *Server) buildChain(handler HandlerFunc) HandlerFunc {
+	chain := handler
 
 	for i := len(s.middlewares) - 1; i >= 0; i-- {
 		next := chain
 		mw := s.middlewares[i]
 
-		chain = func(ctx *Context) { 
-			mw(ctx, next) 
+		chain = func(ctx *Context) {
+			mw(ctx, next)
 		}
 	}
 
 	return chain
+}
+
+func (s *Server) Shutdown() {
+	s.closing.Store(true)
+	s.listener.Close()
+	s.wg.Wait()
 }
