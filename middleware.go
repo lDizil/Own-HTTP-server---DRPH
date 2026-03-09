@@ -5,8 +5,6 @@ import (
 	"time"
 )
 
-type MiddlewareFunc func(ctx *Context, next HandlerFunc)
-
 func Logger(ctx *Context, next HandlerFunc) {
 	start := time.Now()
 

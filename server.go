@@ -204,7 +204,6 @@ func (s *Server) Patch(pattern string, handler HandlerFunc) {
 	s.router.Patch(pattern, handler)
 }
 
-
 func (s *Server) Use(mw MiddlewareFunc) {
 	s.middlewares = append(s.middlewares, mw)
 }

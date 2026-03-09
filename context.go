@@ -61,7 +61,7 @@ func (c *Context) Bytes(code int, body []byte) {
 
 			body = buf.Bytes()
 
-			c.responseHeaders["Content-Encoding"] = "gzip"
+			c.SetResponseHeader("Content-Encoding", "gzip")
 		}
 	}
 
@@ -88,7 +88,7 @@ func (c *Context) Bytes(code int, body []byte) {
 }
 
 func (c *Context) Text(code int, body string) {
-	c.responseHeaders["Content-Type"] = "text/plain; charset=utf-8"
+	c.SetResponseHeader("Content-Type", "text/plain; charset=utf-8")
 	c.Bytes(code, []byte(body))
 }
 

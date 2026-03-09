@@ -14,9 +14,6 @@ type Router struct {
 	Routes []Route
 }
 
-
-type HandlerFunc func(ctx *Context)
-
 func (r *Router) Add(method string, pattern string, handler HandlerFunc) {
 	route := Route{
 		Method:  method,

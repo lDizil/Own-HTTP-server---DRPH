@@ -24,7 +24,6 @@ const (
 	StatusSeeOther          = 303
 	StatusNotModified       = 304
 	StatusUseProxy          = 305
-	_                       = 306 // (Unused)
 	StatusTemporaryRedirect = 307
 	StatusPermanentRedirect = 308
 
@@ -46,7 +45,6 @@ const (
 	StatusUnsupportedMediaType         = 415
 	StatusRequestedRangeNotSatisfiable = 416
 	StatusExpectationFailed            = 417
-	StatusTeapot                       = 418 // (Unused)
 	StatusMisdirectedRequest           = 421
 	StatusUnprocessableEntity          = 422
 	StatusLocked                       = 423 
@@ -153,8 +151,6 @@ func StatusText(code int) string {
 		return "Requested Range Not Satisfiable"
 	case StatusExpectationFailed:
 		return "Expectation Failed"
-	case StatusTeapot:
-		return "I'm a teapot"
 	case StatusMisdirectedRequest:
 		return "Misdirected Request"
 	case StatusUnprocessableEntity:
@@ -198,6 +194,6 @@ func StatusText(code int) string {
 	case StatusNetworkAuthenticationRequired:
 		return "Network Authentication Required"
 	default:
-		return ""
+		return "Unknown status"
 	}
 }
