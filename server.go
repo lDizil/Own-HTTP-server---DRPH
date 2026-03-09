@@ -22,6 +22,9 @@ type Server struct {
 	wg          sync.WaitGroup
 	closing     atomic.Bool
 	MaxBodySize int
+	ready chan struct{}
+	conns map[net.Conn]bool
+	connsMu sync.Mutex
 }
 
 
@@ -30,6 +33,8 @@ func NewServer() *Server {
 		router:      &Router{},
 		middlewares: []MiddlewareFunc{},
 		MaxBodySize: 10 << 20,
+		ready: make(chan struct{}),
+		conns: make(map[net.Conn]bool),
 	}
 }
 
@@ -42,6 +47,9 @@ func (s *Server) Listen(addr string) error {
 	}
 
 	s.listener = l
+
+	fmt.Printf("Сервер запущен на %s\n", addr)
+	close(s.ready)
 
 	for {
 		conn, err := l.Accept()
@@ -63,6 +71,16 @@ func (s *Server) Listen(addr string) error {
 func (s *Server) handleConn(conn net.Conn) {
 	defer s.wg.Done()
 
+	s.connsMu.Lock()
+    s.conns[conn] = false
+    s.connsMu.Unlock()
+    
+    defer func() {
+        s.connsMu.Lock()
+        delete(s.conns, conn)
+        s.connsMu.Unlock()
+    }()
+
 	reader := bufio.NewReader(conn)
 
 	for {
@@ -76,6 +94,10 @@ func (s *Server) handleConn(conn net.Conn) {
 		var badRequest bool
 
 		pathLine, err := reader.ReadString('\n')
+		
+		s.connsMu.Lock()
+		s.conns[conn] = true
+		s.connsMu.Unlock()
 
 		conn.SetDeadline(time.Now().Add(10 * time.Second))
 
@@ -177,6 +199,10 @@ func (s *Server) handleConn(conn net.Conn) {
 			chain(ctx)
 		}
 
+		s.connsMu.Lock()
+		s.conns[conn] = false
+		s.connsMu.Unlock()
+
 		if shouldClose {
 			conn.Close()
 			break
@@ -226,13 +252,22 @@ func (s *Server) buildChain(handler HandlerFunc) HandlerFunc {
 func (s *Server) Shutdown() {
 	s.closing.Store(true)
 	s.listener.Close()
+
+	s.connsMu.Lock()
+	for conn, active := range s.conns {
+		if !active {
+			conn.Close()
+		}
+	}
+	s.connsMu.Unlock()
+
 	s.wg.Wait()
 }
 
 func (s *Server) Run(port string) {
 	go s.Listen("0.0.0.0:" + port)
 
-	fmt.Println("Http сервер успешно запущен")
+	<-s.Ready()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -249,4 +284,8 @@ func(s *Server) Group(prefix string) *Group {
 		routers: s,
 		prefix: prefix,
 	}
+}
+
+func (s *Server) Ready() <-chan struct{} {
+    return s.ready
 }
