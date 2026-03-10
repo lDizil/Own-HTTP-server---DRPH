@@ -8,6 +8,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Context struct {
@@ -20,7 +21,7 @@ type Context struct {
 	Body            []byte
 	writer          io.Writer
 	status          int
-	RemoteAddr       string
+	RemoteAddr      string
 }
 
 func NewContext(method, path string, query map[string]string, headers map[string]string, body []byte, writer io.Writer) *Context {
@@ -34,7 +35,7 @@ func NewContext(method, path string, query map[string]string, headers map[string
 		Body:            body,
 		writer:          writer,
 		status:          200,
-		RemoteAddr: "Неизвестный адрес",
+		RemoteAddr:      "Неизвестный адрес",
 	}
 }
 
@@ -44,6 +45,8 @@ func (c *Context) Bytes(code int, body []byte) {
 	}
 
 	var encodings []string
+
+	c.SetResponseHeader("Date", time.Now().UTC().Format("Mon, 02 Jan 2006 15:04:05 GMT"))
 
 	if val, ok := c.Headers["Accept-Encoding"]; ok {
 		encodings = strings.Split(val, ", ")
