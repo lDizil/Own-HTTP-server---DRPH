@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/textproto"
 	"os"
 	"os/signal"
 	"strconv"
@@ -22,19 +23,18 @@ type Server struct {
 	wg          sync.WaitGroup
 	closing     atomic.Bool
 	MaxBodySize int
-	ready chan struct{}
-	conns map[net.Conn]bool
-	connsMu sync.Mutex
+	ready       chan struct{}
+	conns       map[net.Conn]bool
+	connsMu     sync.Mutex
 }
-
 
 func NewServer() *Server {
 	return &Server{
 		router:      &Router{},
 		middlewares: []MiddlewareFunc{},
 		MaxBodySize: 10 << 20,
-		ready: make(chan struct{}),
-		conns: make(map[net.Conn]bool),
+		ready:       make(chan struct{}),
+		conns:       make(map[net.Conn]bool),
 	}
 }
 
@@ -72,14 +72,14 @@ func (s *Server) handleConn(conn net.Conn) {
 	defer s.wg.Done()
 
 	s.connsMu.Lock()
-    s.conns[conn] = false
-    s.connsMu.Unlock()
-    
-    defer func() {
-        s.connsMu.Lock()
-        delete(s.conns, conn)
-        s.connsMu.Unlock()
-    }()
+	s.conns[conn] = false
+	s.connsMu.Unlock()
+
+	defer func() {
+		s.connsMu.Lock()
+		delete(s.conns, conn)
+		s.connsMu.Unlock()
+	}()
 
 	reader := bufio.NewReader(conn)
 
@@ -94,7 +94,7 @@ func (s *Server) handleConn(conn net.Conn) {
 		var badRequest bool
 
 		pathLine, err := reader.ReadString('\n')
-		
+
 		s.connsMu.Lock()
 		s.conns[conn] = true
 		s.connsMu.Unlock()
@@ -149,7 +149,7 @@ func (s *Server) handleConn(conn net.Conn) {
 				break
 			}
 
-			headers[reqPartsHeaders[0]] = strings.TrimSpace(reqPartsHeaders[1])
+			headers[textproto.CanonicalMIMEHeaderKey(reqPartsHeaders[0])] = strings.TrimSpace(reqPartsHeaders[1])
 
 		}
 
@@ -279,13 +279,13 @@ func (s *Server) Run(port string) {
 	fmt.Println("Сервер остановлен")
 }
 
-func(s *Server) Group(prefix string) *Group {
+func (s *Server) Group(prefix string) *Group {
 	return &Group{
 		routers: s,
-		prefix: prefix,
+		prefix:  prefix,
 	}
 }
 
 func (s *Server) Ready() <-chan struct{} {
-    return s.ready
+	return s.ready
 }
