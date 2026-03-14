@@ -14,6 +14,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/lDizil/Own-HTTP-server---DRPH/metrics"
 )
 
 type Server struct {
@@ -62,6 +64,8 @@ func (s *Server) Listen(addr string) error {
 			return err
 		}
 
+		metrics.HttpActiveConn.Inc()
+		
 		s.wg.Add(1)
 		go s.handleConn(conn)
 
@@ -70,6 +74,7 @@ func (s *Server) Listen(addr string) error {
 
 func (s *Server) handleConn(conn net.Conn) {
 	defer s.wg.Done()
+	defer metrics.HttpActiveConn.Dec()
 
 	s.connsMu.Lock()
 	s.conns[conn] = false
